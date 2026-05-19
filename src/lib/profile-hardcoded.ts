@@ -133,6 +133,102 @@ export const HARD_FILTER = {
   ],
   seniorManagerKeywords: ["senior manager", "sr manager", "sr. manager"],
 
+  // Role-function keywords above are INDICATORS, not a closed set. The dashboard
+  // filter no longer requires a positive match against them; it only rejects
+  // titles that obviously fall outside Ben's wheelhouse (deep IC engineering,
+  // junior ops, finance/accounting back office, etc.). Anything else passes
+  // the filter and the AI fit score decides relevance.
+  roleExcludeKeywords: [
+    // Deep IC engineering / hands-on coding roles
+    "software engineer",
+    "swe",
+    "ml engineer",
+    "data engineer",
+    "data scientist",
+    "backend engineer",
+    "frontend engineer",
+    "full stack engineer",
+    "full-stack engineer",
+    "devops engineer",
+    "site reliability",
+    "sre",
+    "qa engineer",
+    "test engineer",
+    "embedded engineer",
+    "firmware engineer",
+    "security engineer",
+    "research engineer",
+    "research scientist",
+    "applied scientist",
+
+    // Engineering management (Ben's not pitching as eng leader)
+    "engineering manager",
+    "engineering director",
+    "vp engineering",
+    "head of engineering",
+    "cto",
+
+    // Design / UX / creative
+    "designer",
+    "ux ",
+    "ui ",
+    "creative director",
+    "art director",
+    "copywriter",
+    "graphic",
+
+    // Marketing / comms execution roles (not leadership)
+    "marketing coordinator",
+    "marketing specialist",
+    "marketing associate",
+    "social media",
+    "content writer",
+    "seo specialist",
+    "community manager",
+
+    // Finance / accounting back office
+    "accountant",
+    "bookkeeper",
+    "financial analyst",
+    "controller",
+    "audit ",
+    "tax ",
+    "treasury",
+
+    // People / HR ops
+    "recruiter",
+    "talent acquisition",
+    "hr ",
+    "people ops",
+    "people operations",
+
+    // Legal / admin
+    "paralegal",
+    "legal counsel",
+    "executive assistant",
+    "office manager",
+    "receptionist",
+
+    // Field / ops / customer support / clinical
+    "warehouse",
+    "driver",
+    "technician",
+    "nurse",
+    "physician",
+    "clinical",
+    "barista",
+    "cashier",
+    "retail associate",
+
+    // Junior / intern levels
+    "intern ",
+    "internship",
+    "associate ",
+    "entry-level",
+    "entry level",
+    "junior ",
+  ],
+
   minTotalCompUsd: 250_000,
 
   rejectIfRequiresRelocationOutsideSeattle: true,
@@ -265,6 +361,13 @@ export function titleMatchesRoleFunction(title: string): boolean {
   return HARD_FILTER.roleFunctionKeywords.some((k) => t.includes(k));
 }
 
+// Negative filter: reject only obviously off-target titles. Returns true if
+// the title is NOT in the exclude list — i.e. acceptable to pass through.
+export function titleNotExcluded(title: string): boolean {
+  const t = title.toLowerCase();
+  return !HARD_FILTER.roleExcludeKeywords.some((k) => t.includes(k));
+}
+
 export function titleMeetsSeniority(title: string, salaryMax: number | null): boolean {
   const t = title.toLowerCase();
   if (HARD_FILTER.seniorityKeywords.some((k) => t.includes(k))) return true;
@@ -305,8 +408,8 @@ export function filterPosting(p: {
   if (!locationPasses(p.location, p.remote, p.source)) {
     return { keep: false, reason: "location outside Seattle metro / remote-US" };
   }
-  if (!titleMatchesRoleFunction(p.title)) {
-    return { keep: false, reason: "title doesn't match target role functions" };
+  if (!titleNotExcluded(p.title)) {
+    return { keep: false, reason: "title in exclude list (IC engineering / junior / back-office / etc.)" };
   }
   if (!titleMeetsSeniority(p.title, p.salaryMax)) {
     return { keep: false, reason: "below target seniority" };
@@ -341,13 +444,31 @@ GEOGRAPHY
 - Based in Seattle, WA. Will not relocate outside Seattle metro.
 - Acceptable locations: Seattle metro, US-remote. For German employers, anywhere in North America.
 
-TARGET ROLES (in priority order — score higher when title/JD matches earlier items)
-1. Partner Manager / Alliance Manager / Partner Success Lead / GSI Partner Lead — at any vendor in the AI, cloud, or B2B SaaS space (e.g. Anthropic, OpenAI, Databricks, Snowflake, MongoDB, Confluent, AWS, GCP, Salesforce, ServiceNow, SAP, Microsoft itself).
-2. Head of Ecosystem / Head of Partnerships / VP Partnerships / Director of Partnerships.
-3. Country Manager / Head of US / GM US — especially for European (ideally German) firms entering or scaling in the US.
-4. Business Development leadership (Head of BD, VP BD).
-5. Sales leadership (VP Sales, Head of Sales) — lower priority than partner/alliance roles but acceptable.
-6. Growth / GTM leadership at AI-native or partner-heavy companies.
+TARGET ROLES (INDICATORS, NOT A CLOSED LIST — any adjacent / related role that draws on the same skill set should also score as a fit)
+Strongest fit (score 80+ if otherwise solid):
+- Partner Manager / Alliance Manager / Partner Success Lead / GSI Partner Lead — at any vendor in the AI, cloud, or B2B SaaS space (e.g. Anthropic, OpenAI, Databricks, Snowflake, MongoDB, Confluent, AWS, GCP, Salesforce, ServiceNow, SAP, Microsoft).
+- Head of Ecosystem / Head of Partnerships / VP Partnerships / Director of Partnerships.
+- Country Manager / Head of US / GM US — especially for European (ideally German) firms entering or scaling in the US.
+
+Strong fit (score 70+):
+- Business Development leadership (Head of BD, VP BD, Director of BD).
+- Strategic Accounts / Enterprise Sales leadership (VP Sales, Head of Sales, Director of Sales).
+- Growth / GTM leadership at AI-native or partner-heavy companies.
+- AI Transformation lead / Head of AI / AI Go-to-Market lead.
+
+Related / adjacent roles to also consider (score on merits — do NOT require an exact title match):
+- Customer Success leadership (VP CS, Head of CS) — partner success skills transfer.
+- Solutions / Pre-sales leadership (VP Solutions, Head of Solutions Engineering) when partner-facing.
+- Channel / Reseller program leadership.
+- Strategic alliances within a specific industry (e.g. "Head of Cloud Alliances", "Director Microsoft Alliance", "Lead — AWS Partnership").
+- Revenue Operations leadership if framed strategically.
+- Practice / Capability leadership inside a vendor (not another Big-4 seat).
+- Founding GTM hire / first US hire at a Series B+ startup.
+- Strategic / corporate development at a software vendor.
+- Industry GM (e.g. "GM — Financial Services" at a SaaS vendor) when partner-led.
+- Anything titled "Head of <X>" or "VP <X>" where <X> is partner, alliance, ecosystem, channel, sales, growth, GTM, BD, customer success, or solutions.
+
+Use judgment for roles that don't appear on this list. Skills overlap matters more than title overlap.
 
 SENIORITY & COMP
 - Target seniority: Director, VP, Head of. Senior Manager OK only if total comp >= $250k.
@@ -369,5 +490,7 @@ SCORING GUIDANCE
 - A "Partner Manager — Microsoft Alliance" or "Head of GSI Partnerships" type role at an AI/SaaS vendor should score 85+.
 - A generic VP Sales role outside the partner ecosystem may still pass filters but should typically score 60–75.
 - A first-US-hire role at a German B2B AI/SaaS company should score 80+ even without published comp.
+- An adjacent role (Customer Success VP, Solutions Lead at a cloud vendor, Strategic Accounts Director, Channel Sales lead, founding GTM hire) — score on merits based on skill overlap. Do not penalize for not matching the indicator titles exactly.
 - Consulting / Big-4 senior manager roles (anything that looks like another KPMG/EY/Deloitte/PwC seat): score below 50 unless explicitly partner-program-focused.
+- IC engineering, junior roles, back-office finance/HR/legal/admin: should already be filtered out before reaching you. If one slips through, score below 30.
 `.trim();

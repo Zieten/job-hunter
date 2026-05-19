@@ -45,19 +45,22 @@ export function SearchCriteriaCard() {
 
       <div className="border-t" />
 
-      {/* Target roles (priority order) */}
+      {/* Target roles (indicators, not exhaustive) */}
       <section className="space-y-2">
         <div className="flex items-center gap-2">
           <Briefcase className="size-4 text-muted-foreground" />
-          <h3 className="text-xs uppercase tracking-wide font-semibold text-muted-foreground">Target roles (priority order)</h3>
+          <h3 className="text-xs uppercase tracking-wide font-semibold text-muted-foreground">Target roles — indicators (any adjacent role also counts)</h3>
         </div>
+        <p className="text-xs text-muted-foreground italic">
+          These are signals, not a closed list. The filter only rejects obviously off-target titles (IC engineering, junior, back-office). The AI fit score decides whether anything else is a fit based on skill overlap.
+        </p>
         <ol className="text-sm space-y-1 list-decimal list-inside">
-          <li><strong>Partner / Alliance Manager · Partner Success Lead · GSI Partner Lead</strong> — at AI / cloud / SaaS vendors</li>
+          <li><strong>Strongest:</strong> Partner / Alliance Manager · Partner Success Lead · GSI Partner Lead — at AI / cloud / SaaS vendors</li>
           <li>Head of Ecosystem · Head of Partnerships · VP / Director Partnerships</li>
           <li>Country Manager · Head of US · GM US — especially European / German firms</li>
-          <li>Business Development leadership (Head of BD, VP BD)</li>
-          <li>Sales leadership (VP Sales, Head of Sales) — lower priority</li>
-          <li>Growth / GTM leadership at AI-native or partner-heavy companies</li>
+          <li>Business Development leadership · Strategic Accounts · Enterprise Sales leadership</li>
+          <li>Growth / GTM leadership · AI Transformation leadership · Head of AI</li>
+          <li><span className="text-muted-foreground">Adjacent: Customer Success VP, Solutions / Pre-sales leadership, Channel programs, Strategic alliances within an industry, Revenue Ops, Founding GTM, Industry GM at a SaaS vendor, etc.</span></li>
         </ol>
       </section>
 
@@ -132,6 +135,16 @@ export function SearchCriteriaCard() {
             <p className="font-medium">Dealbreaker</p>
             <p className="text-muted-foreground text-xs mt-0.5">
               Requires relocation outside Seattle metro.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-start gap-2">
+          <Ban className="size-4 text-muted-foreground shrink-0 mt-0.5" />
+          <div className="text-sm">
+            <p className="font-medium">Title exclusions (auto-rejected)</p>
+            <p className="text-muted-foreground text-xs mt-0.5">
+              IC engineering (software/data/ML engineer, SRE, etc.), engineering management, design/UX, marketing execution, accounting / finance back-office, HR / recruiting, legal admin, field ops, junior / intern / associate levels.
             </p>
           </div>
         </div>
