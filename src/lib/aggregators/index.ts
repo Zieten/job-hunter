@@ -3,12 +3,10 @@ import { fetchJSearch } from "./jsearch";
 import { fetchAdzuna } from "./adzuna";
 import { fetchGermanToUsRoles } from "./german-us";
 import { fetchIndeedDe } from "./indeed-de";
-import { AGGREGATOR_SEARCH_TERMS, AGGREGATOR_LOCATIONS } from "@/lib/profile-hardcoded";
+import { AGGREGATOR_QUERY_GROUPS, AGGREGATOR_SEARCH_TERMS, AGGREGATOR_LOCATIONS } from "@/lib/profile-hardcoded";
 
 // Run all aggregators (those that are configured via env vars) in parallel.
-// roleKeywords / locations are hardcoded (see profile-hardcoded.ts). The
-// `prefs` parameter is retained only for `seniority` and `salaryMin` —
-// everything else now comes from the hardcoded profile.
+// JSearch now runs one parallel call per query group; the others stay as-is.
 export async function fetchAggregatorPostings(prefs: Preferences): Promise<AggregatorPosting[]> {
   const roleKeywords = [...AGGREGATOR_SEARCH_TERMS];
   const locations = [...AGGREGATOR_LOCATIONS];
@@ -17,7 +15,7 @@ export async function fetchAggregatorPostings(prefs: Preferences): Promise<Aggre
   const tasks: Promise<AggregatorPosting[]>[] = [];
   if (process.env.RAPIDAPI_KEY) {
     tasks.push(
-      fetchJSearch({ roleKeywords, locations, remote, seniorityLevels: prefs.seniority }).catch((e) => {
+      fetchJSearch({ phrases: [...AGGREGATOR_QUERY_GROUPS], remote }).catch((e) => {
         console.error("[jsearch]", e);
         return [];
       }),

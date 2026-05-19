@@ -1,16 +1,4 @@
-import type { AggregatorPosting, SeniorityLevel } from "@/lib/types";
-
-const SENIORITY_LABEL: Partial<Record<SeniorityLevel, string>> = {
-  intern: "Intern",
-  junior: "Junior",
-  senior: "Senior",
-  staff: "Staff",
-  principal: "Principal",
-  director: "Director",
-  vp: "VP",
-  c_level: "C-level",
-  // "mid" intentionally omitted — no search prefix needed
-};
+import type { AggregatorPosting } from "@/lib/types";
 
 type JSearchJob = {
   job_id: string;
@@ -32,34 +20,45 @@ type JSearchJob = {
 type JSearchResponse = { status: string; data: JSearchJob[] };
 
 export type JSearchQuery = {
-  roleKeywords: string[];
-  locations: string[]; // free-form (e.g. "Remote", "San Francisco, CA")
+  // We now run multiple parallel queries — one per phrase group — and dedupe.
+  // Each phrase string becomes a single JSearch `query` parameter.
+  phrases: string[];
   remote: boolean;
-  seniorityLevels?: SeniorityLevel[];
 };
 
+// Run several focused queries in parallel and dedupe by job_id. Each query gets
+// one OR-joined phrase group rather than a single mega-OR that JSearch struggles
+// with. date_posted=week — "today" was dropping ~95% of valid results.
 export async function fetchJSearch(query: JSearchQuery): Promise<AggregatorPosting[]> {
   const key = process.env.RAPIDAPI_KEY;
   if (!key) return [];
 
-  const seniorityTerms = (query.seniorityLevels ?? [])
-    .map((s) => SENIORITY_LABEL[s])
-    .filter(Boolean) as string[];
-  const seniorityPrefix =
-    seniorityTerms.length > 1
-      ? `(${seniorityTerms.join(" OR ")}) `
-      : seniorityTerms.length === 1
-        ? `${seniorityTerms[0]} `
-        : "";
+  const tasks = query.phrases.map((phrase) => runQuery(phrase, query.remote, key));
+  const settled = await Promise.allSettled(tasks);
+  const all: JSearchJob[] = [];
+  for (const r of settled) {
+    if (r.status === "fulfilled") all.push(...r.value);
+    else console.error("[jsearch] query failed:", r.reason);
+  }
 
-  const role = query.roleKeywords.join(" OR ");
-  const location = query.remote ? "" : ` in ${query.locations.join(" OR ")}`;
-  const q = `${seniorityPrefix}${role}${location}`.trim() || "software engineer";
+  // Dedupe by job_id
+  const seen = new Set<string>();
+  const deduped: JSearchJob[] = [];
+  for (const j of all) {
+    if (seen.has(j.job_id)) continue;
+    seen.add(j.job_id);
+    deduped.push(j);
+  }
+
+  return deduped.map(toPosting);
+}
+
+async function runQuery(phrase: string, remote: boolean, key: string): Promise<JSearchJob[]> {
   const url = new URL("https://jsearch.p.rapidapi.com/search");
-  url.searchParams.set("query", q);
-  url.searchParams.set("date_posted", "today");
+  url.searchParams.set("query", phrase);
+  url.searchParams.set("date_posted", "week");
   url.searchParams.set("num_pages", "2");
-  if (query.remote) url.searchParams.set("remote_jobs_only", "true");
+  if (remote) url.searchParams.set("remote_jobs_only", "true");
 
   const res = await fetch(url.toString(), {
     headers: {
@@ -68,10 +67,13 @@ export async function fetchJSearch(query: JSearchQuery): Promise<AggregatorPosti
     },
     signal: AbortSignal.timeout(20000),
   });
-  if (!res.ok) throw new Error(`jsearch: ${res.status}`);
+  if (!res.ok) throw new Error(`jsearch ${res.status} for "${phrase}"`);
   const json = (await res.json()) as JSearchResponse;
+  return json.data ?? [];
+}
 
-  return (json.data ?? []).map((j) => ({
+function toPosting(j: JSearchJob): AggregatorPosting {
+  return {
     source: "aggregator_jsearch" as const,
     externalId: j.job_id,
     companyNameRaw: j.employer_name,
@@ -88,5 +90,5 @@ export async function fetchJSearch(query: JSearchQuery): Promise<AggregatorPosti
     url: j.job_apply_link,
     descriptionMd: j.job_description ?? "",
     postedAt: j.job_posted_at_datetime_utc ? new Date(j.job_posted_at_datetime_utc) : null,
-  }));
+  };
 }

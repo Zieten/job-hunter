@@ -188,12 +188,21 @@ export const HARD_FILTER = {
 
     // Finance / accounting back office
     "accountant",
+    "accounting",
+    "accounts receivable",
+    "accounts payable",
     "bookkeeper",
+    "bookkeeping",
     "financial analyst",
+    "fp&a",
     "controller",
     "audit ",
+    "auditor",
     "tax ",
+    "tax,",
     "treasury",
+    "revenue operations analyst",
+    "revenue accounting",
 
     // People / HR ops
     "recruiter",
@@ -299,10 +308,23 @@ export const DASHBOARD = {
   fitScoreCutoff: 60,
 } as const;
 
-// Focused search-time keywords used by the JSearch / Adzuna aggregators.
-// Kept short so we don't blow past query length limits — broader filtering
-// happens post-fetch via `filterPosting()` and via fit scoring.
-// Ordered roughly by Ben's strongest fit (partner/alliance first).
+// Focused search-time phrase GROUPS for JSearch. Each group becomes one
+// parallel API call. Phrases within a group are joined with OR. Keeping
+// groups small (2-4 phrases) makes JSearch matching more reliable.
+// Each group covers one logical bucket of target roles.
+export const AGGREGATOR_QUERY_GROUPS = [
+  '"Partner Manager" OR "Alliance Manager" OR "Partnerships Manager"',
+  '"Head of Partnerships" OR "Head of Alliances" OR "Head of Ecosystem"',
+  '"VP Partnerships" OR "VP Alliances" OR "Director Partnerships" OR "Director Alliances"',
+  '"Country Manager" OR "Head of US" OR "Head of North America" OR "GM US"',
+  '"VP Business Development" OR "VP Sales" OR "Head of Sales" OR "Head of Growth"',
+  '"Customer Success" Lead OR Director OR VP',
+  '"Strategic Accounts" OR "Strategic Partnerships" OR "GSI Partner"',
+  '"AI Transformation" OR "Head of AI"',
+] as const;
+
+// Legacy single-list form kept for the Profile card preview. Mirrors the
+// strongest terms in the groups above.
 export const AGGREGATOR_SEARCH_TERMS = [
   "Partner Manager",
   "Alliance Manager",
@@ -314,6 +336,9 @@ export const AGGREGATOR_SEARCH_TERMS = [
   "Country Manager US",
   "Head of US",
   "VP Business Development",
+  "Customer Success VP",
+  "Strategic Accounts Director",
+  "AI Transformation",
 ] as const;
 
 // Locations queried against aggregators. Filtering refines this post-fetch.
@@ -411,11 +436,12 @@ export function filterPosting(p: {
   if (!titleNotExcluded(p.title)) {
     return { keep: false, reason: "title in exclude list (IC engineering / junior / back-office / etc.)" };
   }
-  if (!titleMeetsSeniority(p.title, p.salaryMax)) {
-    return { keep: false, reason: "below target seniority" };
-  }
+  // Seniority + comp are no longer hard gates — they're soft signals the AI fit
+  // score weighs. A "Partner Manager" at a vendor can be senior even without
+  // "Director/VP/Head" in the title. Comp is often unpublished. Trust the
+  // exclude list to catch junior roles and let fit scoring decide the rest.
   if (!compPasses(p.salaryMax)) {
-    return { keep: false, reason: "below comp floor" };
+    return { keep: false, reason: "below comp floor (published)" };
   }
   return { keep: true };
 }

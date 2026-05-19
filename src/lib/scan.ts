@@ -126,7 +126,7 @@ export async function runScan(userId: string): Promise<ScanReport> {
   const unscored = await db.jobPosting.findMany({
     where: { assessment: null },
     include: { company: true },
-    take: 30,
+    take: 100,
   });
   const fitLimit = pLimit(3);
   let totalScored = 0;

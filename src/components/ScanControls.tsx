@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 type ScanReport = {
   totalNew: number;
   totalScored: number;
-  laneAFavorites: { ok: boolean }[];
+  laneAFavorites: { ok: boolean; newCount: number }[];
   laneBAggregators: { newCount: number; error?: string };
 };
 
@@ -33,7 +33,14 @@ export function ScanControls() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Scan failed");
       const r = data as ScanReport;
-      toast.success(`Scan complete — ${r.totalNew} new, ${r.totalScored} scored`, { id: t });
+      const laneA = r.laneAFavorites.reduce((s, x) => s + (x.newCount ?? 0), 0);
+      const laneB = r.laneBAggregators.newCount;
+      const desc = `Lane A (favorites): ${laneA} · Lane B (aggregators): ${laneB}${r.laneBAggregators.error ? ` · Lane B error: ${r.laneBAggregators.error}` : ""}`;
+      toast.success(`Scan complete — ${r.totalNew} new, ${r.totalScored} scored`, {
+        id: t,
+        description: desc,
+        duration: 8000,
+      });
       router.refresh();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Scan failed", { id: t });
