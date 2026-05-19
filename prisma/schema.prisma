@@ -1,0 +1,190 @@
+// Prisma schema for Personal Job-Hunter web app
+// See plan: C:\Users\valer\.claude\plans\create-a-web-app-iterative-wave.md
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// --- Auth (NextAuth v5 / Auth.js Prisma adapter shape) ---
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  image         String?
+  emailVerified DateTime?
+  createdAt     DateTime  @default(now())
+
+  accounts Account[]
+  sessions Session[]
+  profile  Profile?
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// --- App domain ---
+
+model Profile {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  linkedinJson Json?    // parsed LinkedIn export
+  cvText       String?  @db.Text
+  cvFileUrl    String?  // Blob URL of original uploaded CV
+  voiceNotes   Json     @default("[]") // array of { id, transcript, createdAt, tags }
+  preferences  Json     @default("{}") // { salaryMin, salaryMax, currency, locations[], remote, roleKeywords[], dealbreakers[], mustHaves[], seniority }
+
+  updatedAt    DateTime @updatedAt
+  createdAt    DateTime @default(now())
+}
+
+enum AtsType {
+  greenhouse
+  lever
+  ashby
+  workday
+  generic_html
+  unknown
+}
+
+model Company {
+  id            String   @id @default(cuid())
+  name          String
+  normalizedName String  // lowercase, punctuation/legal-suffix stripped
+  careersUrl    String?
+  atsType       AtsType  @default(unknown)
+  atsSlug       String?  // e.g. greenhouse board slug, lever org id
+  atsTenant     String?  // workday tenant
+  atsHost       String?  // workday host
+  atsSite       String?  // workday site
+  logoUrl          String?  // Clearbit Logo API URL (cached)
+  isFavorite       Boolean  @default(false)
+  active           Boolean  @default(true)
+  lastScrapedAt    DateTime?
+  lastError        String?  @db.Text
+  scanIntervalDays Int      @default(1)   // 1 = daily, 14 = biweekly
+  fundingStage     String?               // "Series C", "Series D", etc.
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  postings      JobPosting[]
+
+  @@unique([normalizedName])
+}
+
+enum JobSource {
+  favorite_scrape
+  aggregator_jsearch
+  aggregator_adzuna
+  aggregator_german_us
+  aggregator_indeed_de
+}
+
+enum JobStatus {
+  new
+  reviewed
+  dismissed
+  selected
+  applied
+}
+
+model JobPosting {
+  id              String    @id @default(cuid())
+  companyId       String
+  company         Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  externalId      String    // ATS or aggregator job id
+  title           String
+  normalizedTitle String
+  location        String?
+  remote          Boolean   @default(false)
+  salaryText      String?
+  salaryMin       Int?
+  salaryMax       Int?
+  salaryCurrency  String?
+  url             String    // apply link
+  descriptionMd   String    @db.Text
+  postedAt        DateTime?
+  firstSeenAt     DateTime  @default(now())
+
+  source          JobSource
+  status          JobStatus @default(new)
+
+  assessment      FitAssessment?
+  tailoredCVs     TailoredCV[]
+
+  @@unique([companyId, externalId, source])
+  @@index([status, firstSeenAt])
+}
+
+model FitAssessment {
+  id                    String   @id @default(cuid())
+  jobPostingId          String   @unique
+  jobPosting            JobPosting @relation(fields: [jobPostingId], references: [id], onDelete: Cascade)
+
+  fitScore              Int      // 0-100
+  interviewProbability  Int      // 0-100
+  strengths             Json     // string[]
+  gaps                  Json     // string[]
+  reasoning             String   @db.Text
+  modelUsed             String
+  createdAt             DateTime @default(now())
+}
+
+model TailoredCV {
+  id              String   @id @default(cuid())
+  jobPostingId    String
+  jobPosting      JobPosting @relation(fields: [jobPostingId], references: [id], onDelete: Cascade)
+
+  version         Int      @default(1)
+  markdownSource  String   @db.Text
+  jsonStructure   Json
+  pdfBlobUrl      String?
+  docxBlobUrl     String?
+  modelUsed       String
+
+  createdAt       DateTime @default(now())
+
+  @@index([jobPostingId, createdAt])
+}
