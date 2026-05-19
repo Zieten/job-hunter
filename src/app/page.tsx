@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { JobCard } from "@/components/JobCard";
 import { EmptyState } from "@/components/EmptyState";
 import { Button } from "@/components/ui/button";
+import { ScanControls } from "@/components/ScanControls";
 import { Inbox, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { DASHBOARD, filterPosting, isGermanSource, SOFT_PREFERENCES } from "@/lib/profile-hardcoded";
@@ -66,11 +67,12 @@ export default async function DashboardPage() {
 
   return (
     <div className="py-6 space-y-6">
-      <div className="flex items-end justify-between gap-4">
+      <div className="flex items-end justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">Today's matches</h1>
-          <p className="text-muted-foreground mt-1">Scanned twice daily at 7:30 AM and 5:30 PM PT.</p>
+          <p className="text-muted-foreground mt-1">Trigger a scan whenever you want fresh postings.</p>
         </div>
+        <ScanControls />
       </div>
 
       <div className="flex gap-2 flex-wrap">
