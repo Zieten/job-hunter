@@ -8,7 +8,6 @@ import { ThemeToggle } from "./ThemeToggle";
 const links = [
   { href: "/", label: "Dashboard" },
   { href: "/companies", label: "Companies" },
-  { href: "/search-criteria", label: "Criteria" },
   { href: "/profile", label: "Profile" },
 ];
 

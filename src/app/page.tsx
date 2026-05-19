@@ -88,14 +88,9 @@ export default async function DashboardPage() {
           title="No postings yet"
           description="No matching roles yet. Add favorite companies, then trigger a scan. Jobs scored below 60 are hidden (+15 boost applies to German firms)."
           action={
-            <div className="flex gap-2">
-              <Button asChild>
-                <Link href="/companies"><Sparkles className="size-4" /> Add companies</Link>
-              </Button>
-              <Button asChild variant="outline">
-                <Link href="/search-criteria">Set criteria</Link>
-              </Button>
-            </div>
+            <Button asChild>
+              <Link href="/companies"><Sparkles className="size-4" /> Add companies</Link>
+            </Button>
           }
         />
       ) : (

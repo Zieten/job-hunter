@@ -2,6 +2,7 @@ import { auth, signOut } from "@/auth";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { ProfileUI } from "./ProfileUI";
+import { SearchCriteriaCard } from "@/components/SearchCriteriaCard";
 import { Button } from "@/components/ui/button";
 import { LogOut } from "lucide-react";
 
@@ -31,6 +32,7 @@ export default async function ProfilePage() {
           </Button>
         </form>
       </div>
+      <SearchCriteriaCard />
       <ProfileUI profile={profile} userEmail={session.user.email ?? ""} />
     </div>
   );
