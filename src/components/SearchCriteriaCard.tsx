@@ -1,37 +1,75 @@
-import { Target, MapPin, Briefcase, DollarSign, Plane, Globe2, Sparkles, Ban } from "lucide-react";
-import { CANDIDATE, HARD_FILTER, SOFT_PREFERENCES, DASHBOARD } from "@/lib/profile-hardcoded";
+import { Target, MapPin, Briefcase, DollarSign, Plane, Globe2, Sparkles, Ban, User2, Search } from "lucide-react";
+import { CANDIDATE, HARD_FILTER, SOFT_PREFERENCES, DASHBOARD, AGGREGATOR_SEARCH_TERMS } from "@/lib/profile-hardcoded";
 
 // Read-only card that surfaces the hardcoded search criteria from
 // src/lib/profile-hardcoded.ts. To change anything below, edit that file.
 export function SearchCriteriaCard() {
+  const bg = CANDIDATE.background;
   return (
-    <div className="rounded-xl border bg-card p-5 space-y-5">
+    <div className="rounded-xl border bg-card p-5 space-y-6">
       <div className="flex items-start gap-2">
         <Target className="size-5 text-primary shrink-0 mt-0.5" />
         <div>
-          <h2 className="font-semibold">Search criteria</h2>
+          <h2 className="font-semibold">Search criteria & background</h2>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Hardcoded — these drive the dashboard filter and the AI fit score. Edit{" "}
+            Hardcoded — drives the dashboard filter, the aggregator queries, and the AI fit score. Edit{" "}
             <code className="rounded bg-muted px-1 py-0.5 text-[10px]">src/lib/profile-hardcoded.ts</code> to change.
           </p>
         </div>
       </div>
 
-      <div className="grid sm:grid-cols-2 gap-4 text-sm">
-        <Row icon={<MapPin className="size-4" />} label="Location">
-          <p>Based in <strong>{CANDIDATE.basedIn}</strong>. Seattle metro or US-remote.</p>
-          {HARD_FILTER.northAmericaOkForGermanFirms && (
-            <p className="text-muted-foreground text-xs mt-1">For German firms: anywhere in North America.</p>
-          )}
-        </Row>
-
-        <Row icon={<Briefcase className="size-4" />} label="Target roles">
-          <ul className="space-y-0.5">
-            <li>Country Manager / Head of US / GM</li>
-            <li>Business Development &amp; Partnerships</li>
-            <li>Sales leadership <span className="text-muted-foreground">(lower priority)</span></li>
-            <li>Growth / GTM leadership</li>
+      {/* Background */}
+      <section className="space-y-2">
+        <div className="flex items-center gap-2">
+          <User2 className="size-4 text-muted-foreground" />
+          <h3 className="text-xs uppercase tracking-wide font-semibold text-muted-foreground">Who you are</h3>
+        </div>
+        <div className="text-sm space-y-1">
+          <p><strong>{CANDIDATE.name}</strong> · {bg.currentTitle}</p>
+          <p className="text-muted-foreground text-xs">
+            {bg.yearsExperience}+ years across {bg.currentEmployer} + {bg.priorEmployers.slice(0, 2).join(", ")} · {CANDIDATE.basedIn}
+          </p>
+        </div>
+        <div>
+          <p className="text-xs font-medium text-muted-foreground mb-1">Core strengths</p>
+          <ul className="text-sm space-y-0.5 list-disc list-inside text-muted-foreground">
+            {bg.coreStrengths.map((s) => (
+              <li key={s}>{s}</li>
+            ))}
           </ul>
+        </div>
+        <div className="text-xs text-muted-foreground">
+          <strong className="text-foreground">Tech alliances:</strong> {bg.technologyAlliances.join(" · ")}
+        </div>
+      </section>
+
+      <div className="border-t" />
+
+      {/* Target roles (priority order) */}
+      <section className="space-y-2">
+        <div className="flex items-center gap-2">
+          <Briefcase className="size-4 text-muted-foreground" />
+          <h3 className="text-xs uppercase tracking-wide font-semibold text-muted-foreground">Target roles (priority order)</h3>
+        </div>
+        <ol className="text-sm space-y-1 list-decimal list-inside">
+          <li><strong>Partner / Alliance Manager · Partner Success Lead · GSI Partner Lead</strong> — at AI / cloud / SaaS vendors</li>
+          <li>Head of Ecosystem · Head of Partnerships · VP / Director Partnerships</li>
+          <li>Country Manager · Head of US · GM US — especially European / German firms</li>
+          <li>Business Development leadership (Head of BD, VP BD)</li>
+          <li>Sales leadership (VP Sales, Head of Sales) — lower priority</li>
+          <li>Growth / GTM leadership at AI-native or partner-heavy companies</li>
+        </ol>
+      </section>
+
+      <div className="border-t" />
+
+      {/* Filter constraints */}
+      <section className="grid sm:grid-cols-2 gap-4 text-sm">
+        <Row icon={<MapPin className="size-4" />} label="Location">
+          <p>Seattle metro or US-remote.</p>
+          {HARD_FILTER.northAmericaOkForGermanFirms && (
+            <p className="text-muted-foreground text-xs mt-1">German firms: anywhere in North America.</p>
+          )}
         </Row>
 
         <Row icon={<Target className="size-4" />} label="Seniority">
@@ -52,17 +90,28 @@ export function SearchCriteriaCard() {
         </Row>
 
         <Row icon={<Globe2 className="size-4" />} label="Languages">
-          <p>English, German{CANDIDATE.speaksGerman ? " (fluent — strength for German firms)" : ""}.</p>
+          <p>German native, English business fluent, Italian intermediate.</p>
         </Row>
-      </div>
 
-      <div className="border-t pt-4 space-y-3">
+        <Row icon={<Search className="size-4" />} label="Aggregator queries">
+          <p className="text-muted-foreground text-xs">
+            {AGGREGATOR_SEARCH_TERMS.slice(0, 4).join(" · ")} …{" "}
+            <span className="opacity-60">+{AGGREGATOR_SEARCH_TERMS.length - 4} more</span>
+          </p>
+        </Row>
+      </section>
+
+      <div className="border-t" />
+
+      {/* Verticals & dealbreakers */}
+      <section className="space-y-3">
         <div className="flex items-start gap-2">
           <Sparkles className="size-4 text-primary shrink-0 mt-0.5" />
           <div className="text-sm">
             <p className="font-medium">Preferred verticals (fit boost)</p>
             <p className="text-muted-foreground text-xs mt-0.5">
-              AI / ML / GenAI, B2B SaaS, dev tools, cloud infra, security, mobility, climate, energy, industrial, supply chain, product, hardware, venture capital.
+              AI / Agentic / GenAI / LLM · enterprise SaaS · dev tools / cloud infra / data platforms / security ·
+              partner ecosystem / alliances / GSI · mobility / climate / energy / industrial / supply chain · sustainability / ESG · hardware · VC.
             </p>
           </div>
         </div>
@@ -72,7 +121,7 @@ export function SearchCriteriaCard() {
           <div className="text-sm">
             <p className="font-medium">Deprioritized</p>
             <p className="text-muted-foreground text-xs mt-0.5">
-              Retail banking, consumer fintech. Not excluded — just penalized in fit scoring.
+              Retail banking, consumer fintech, gambling, adult. Not excluded — penalized in fit scoring.
             </p>
           </div>
         </div>
@@ -86,10 +135,10 @@ export function SearchCriteriaCard() {
             </p>
           </div>
         </div>
-      </div>
+      </section>
 
-      <div className="border-t pt-3 flex items-center justify-between text-xs text-muted-foreground">
-        <span>German firms get a <strong>+{SOFT_PREFERENCES.germanFirm.fitScoreBoost}</strong> fit boost and bypass strict gates.</span>
+      <div className="border-t pt-3 flex items-center justify-between text-xs text-muted-foreground flex-wrap gap-2">
+        <span>German firms: <strong>+{SOFT_PREFERENCES.germanFirm.fitScoreBoost}</strong> fit boost · bypass strict gates.</span>
         <span>Dashboard cutoff: <strong>{DASHBOARD.fitScoreCutoff}</strong></span>
       </div>
     </div>

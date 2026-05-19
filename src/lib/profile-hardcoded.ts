@@ -4,9 +4,39 @@
 import type { JobSource } from "@prisma/client";
 
 export const CANDIDATE = {
+  name: "Ben Reiss",
   speaksGerman: true,
+  germanNative: true,
   basedIn: "Seattle, WA",
   willingToCoverNorthAmericaForDeFirm: true,
+
+  // Background signals used by the SearchCriteriaCard and the fit prompt.
+  // Source: LinkedIn + CV (Oct 2022 – present at KPMG US; prior EY + KPMG Germany).
+  background: {
+    yearsExperience: 10,
+    currentTitle: "Director — Operational Excellence, AI Transformation & GTM (KPMG x Microsoft)",
+    currentEmployer: "KPMG US",
+    priorEmployers: ["KPMG Germany", "Ernst & Young", "Secucloud", "Porsche Design Group"],
+    education: ["MBA (HAW Hamburg)", "BSc (Hochschule Niederrhein)"],
+    notableWins: [
+      "FY26: sold $2.5M in AI transformation work directly to Microsoft",
+      "Founded EMEA ESG Task Force (35 people, 60+ countries)",
+      "Built KPMG US sustainability practice from zero",
+    ],
+    coreStrengths: [
+      "GSI / Big-4 alliance strategy (inside view from both EY and KPMG)",
+      "Microsoft ecosystem partner success — QBRs, JBP, co-investment, adoption",
+      "Partner Success & Lifecycle Management (adoption, retention, expansion)",
+      "Zero-to-one team building and capability programs",
+      "Agentic AI / Claude Code (uses Claude Code daily for partner workflows)",
+      "Cross-cultural EMEA ↔ US execution; native German",
+    ],
+    technologyAlliances: ["Microsoft", "SAP", "ServiceNow", "Salesforce", "Anthropic"],
+    communityRoles: [
+      "Steering Committee — German American Chamber of Commerce & German Consulate, Seattle",
+      "Big Brothers Big Sisters of America (Seattle)",
+    ],
+  },
 } as const;
 
 export const HARD_FILTER = {
@@ -24,6 +54,7 @@ export const HARD_FILTER = {
   northAmericaOkForGermanFirms: true,
 
   roleFunctionKeywords: [
+    // Country / GM / regional leadership
     "country manager",
     "head of us",
     "head of north america",
@@ -33,9 +64,42 @@ export const HARD_FILTER = {
     "vp us",
     "vp north america",
     "vp americas",
-    "business development",
-    "head of partnerships",
+
+    // Partner / alliance / ecosystem — Ben's core strength (GSI alliances, partner success)
+    "partner manager",
+    "partnerships manager",
+    "alliance manager",
+    "alliances manager",
+    "strategic alliances",
     "strategic partnerships",
+    "head of partnerships",
+    "head of alliances",
+    "head of ecosystem",
+    "head of partner",
+    "vp partnerships",
+    "vp alliances",
+    "vp ecosystem",
+    "vp partner",
+    "director of partnerships",
+    "director of alliances",
+    "director of partner",
+    "director, partner",
+    "director, partnerships",
+    "partner success",
+    "partner lead",
+    "partner sales",
+    "channel sales",
+    "channel manager",
+    "ecosystem lead",
+    "ecosystem manager",
+    "gsi lead",
+    "gsi partner",
+    "global si",
+    "global systems integrator",
+    "si partnerships",
+
+    // BD / sales / growth / GTM
+    "business development",
     "vp sales",
     "head of sales",
     "director of sales",
@@ -46,6 +110,12 @@ export const HARD_FILTER = {
     "gtm lead",
     "head of gtm",
     "go-to-market",
+
+    // AI-transformation flavored roles (matches recent KPMG positioning)
+    "ai transformation",
+    "head of ai",
+    "ai strategy",
+    "ai go-to-market",
   ],
 
   seniorityKeywords: [
@@ -55,8 +125,11 @@ export const HARD_FILTER = {
     "vice president",
     "chief",
     "cro",
+    "cpo",
     "founding",
     "general manager",
+    "principal",
+    "lead",
   ],
   seniorManagerKeywords: ["senior manager", "sr manager", "sr. manager"],
 
@@ -67,29 +140,55 @@ export const HARD_FILTER = {
 
 export const SOFT_PREFERENCES = {
   preferredVerticals: [
+    // AI / ML — strongest current fit
     "ai",
     "ml",
     "machine learning",
     "genai",
     "llm",
+    "agentic",
+    "foundation model",
+    "ai transformation",
+    "ai platform",
+
+    // Enterprise SaaS & infra — Ben's bread and butter
     "b2b saas",
+    "enterprise software",
     "developer tools",
     "devtools",
     "cloud",
     "infrastructure",
+    "data platform",
     "security",
+    "observability",
+
+    // Partner / alliance / ecosystem signals — high relevance per CV
+    "partner ecosystem",
+    "alliance",
+    "alliances",
+    "partnerships",
+    "channel",
+    "gsi",
+    "systems integrator",
+
+    // Vertical industries that still fit
     "mobility",
     "ev",
     "climate",
     "energy",
     "industrial",
     "supply chain",
+    "manufacturing",
     "product",
     "hardware",
+    "sustainability",
+    "esg",
+
+    // Investor-side
     "venture capital",
     "vc",
   ],
-  deprioritizedVerticals: ["retail banking", "consumer fintech"],
+  deprioritizedVerticals: ["retail banking", "consumer fintech", "gambling", "adult"],
 
   germanFirm: {
     bypassRoleAndSeniorityFilter: true,
@@ -103,6 +202,26 @@ export const SOFT_PREFERENCES = {
 export const DASHBOARD = {
   fitScoreCutoff: 60,
 } as const;
+
+// Focused search-time keywords used by the JSearch / Adzuna aggregators.
+// Kept short so we don't blow past query length limits — broader filtering
+// happens post-fetch via `filterPosting()` and via fit scoring.
+// Ordered roughly by Ben's strongest fit (partner/alliance first).
+export const AGGREGATOR_SEARCH_TERMS = [
+  "Partner Manager",
+  "Alliance Manager",
+  "Head of Partnerships",
+  "Director Alliances",
+  "VP Partnerships",
+  "GSI Partner",
+  "Ecosystem Lead",
+  "Country Manager US",
+  "Head of US",
+  "VP Business Development",
+] as const;
+
+// Locations queried against aggregators. Filtering refines this post-fetch.
+export const AGGREGATOR_LOCATIONS = ["Seattle", "Remote", "United States"] as const;
 
 // ────────────────────────────────────────────────────────────────────────────
 // Helpers used by the dashboard filter and the fit-scoring prompt.
@@ -202,15 +321,53 @@ export function filterPosting(p: {
 // it sits inside the cached system block so it costs once across the batch.
 export const HARDCODED_PREFS_PROMPT = `
 HARDCODED CANDIDATE PROFILE (authoritative — overrides any conflicting profile blob):
+
+WHO HE IS
+- Ben Reiss. Director at KPMG US (Microsoft ecosystem). ~10 years across EY + KPMG.
+- German native, Seattle-based. Steering committee member, German American Chamber of Commerce Seattle.
+- Built KPMG's EMEA ESG Task Force (35 people, 60+ countries) and KPMG US sustainability practice from zero.
+- FY26: sold $2.5M in AI transformation work directly to Microsoft as a client.
+- Uses Claude Code daily to build agentic workflows for partner research, account planning, pipeline reporting.
+
+CORE STRENGTHS (weight heavily as fit signals)
+- GSI / Big-4 alliance strategy — has worked inside the GSIs and now sells partner programs from the vendor side.
+- Microsoft ecosystem partner success: QBRs, joint business planning, co-investment alignment, adoption tracking.
+- Partner success lifecycle: adoption, retention, expansion across managed partner portfolios.
+- Zero-to-one team building, capability frameworks, GTM motion design.
+- Agentic AI / Claude Code fluency.
+- Cross-cultural EMEA ↔ US execution.
+
+GEOGRAPHY
 - Based in Seattle, WA. Will not relocate outside Seattle metro.
 - Acceptable locations: Seattle metro, US-remote. For German employers, anywhere in North America.
-- Target roles: Country Manager / Head of US / GM, Business Development & Partnerships, Sales leadership (lower priority), Growth / GTM leadership.
-- Target seniority: Director, VP / Head of. Senior Manager OK only if total comp >= $250k.
+
+TARGET ROLES (in priority order — score higher when title/JD matches earlier items)
+1. Partner Manager / Alliance Manager / Partner Success Lead / GSI Partner Lead — at any vendor in the AI, cloud, or B2B SaaS space (e.g. Anthropic, OpenAI, Databricks, Snowflake, MongoDB, Confluent, AWS, GCP, Salesforce, ServiceNow, SAP, Microsoft itself).
+2. Head of Ecosystem / Head of Partnerships / VP Partnerships / Director of Partnerships.
+3. Country Manager / Head of US / GM US — especially for European (ideally German) firms entering or scaling in the US.
+4. Business Development leadership (Head of BD, VP BD).
+5. Sales leadership (VP Sales, Head of Sales) — lower priority than partner/alliance roles but acceptable.
+6. Growth / GTM leadership at AI-native or partner-heavy companies.
+
+SENIORITY & COMP
+- Target seniority: Director, VP, Head of. Senior Manager OK only if total comp >= $250k.
 - Minimum total comp (base + bonus, ignoring equity): $250,000.
 - Acceptable travel: up to 50%.
-- Speaks fluent German — weight this as a strength for any German firm, German JD, or German-counterparty role.
-- PREFERRED verticals (boost): AI/ML/GenAI, B2B SaaS / dev tools / cloud infra / security, mobility / climate / energy / industrial / supply chain, product, hardware, venture capital.
-- DEPRIORITIZED verticals (slight penalty, not exclusion): retail banking, consumer fintech.
+
+VERTICALS
+- PREFERRED (boost): AI/ML/GenAI/Agentic, enterprise SaaS, dev tools, cloud infra, data platforms, security, observability, partner-ecosystem businesses, mobility/EV/climate/energy/industrial/supply chain, sustainability/ESG, hardware, venture capital.
+- DEPRIORITIZED (slight penalty, not exclusion): retail banking, consumer fintech, gambling, adult.
+
+GERMAN ANGLE
 - GERMAN-firm postings (sources aggregator_german_us, aggregator_indeed_de): apply a +15 fit boost AND ignore the strict role/seniority/comp filters (comp is often non-public for first-US-hire roles).
-- Hard dealbreaker: requires relocation outside Seattle metro.
+- German-language JDs or roles requiring German-counterparty work: treat fluency as a meaningful strength even without a German employer.
+
+DEALBREAKERS
+- Requires relocation outside Seattle metro.
+
+SCORING GUIDANCE
+- A "Partner Manager — Microsoft Alliance" or "Head of GSI Partnerships" type role at an AI/SaaS vendor should score 85+.
+- A generic VP Sales role outside the partner ecosystem may still pass filters but should typically score 60–75.
+- A first-US-hire role at a German B2B AI/SaaS company should score 80+ even without published comp.
+- Consulting / Big-4 senior manager roles (anything that looks like another KPMG/EY/Deloitte/PwC seat): score below 50 unless explicitly partner-program-focused.
 `.trim();

@@ -3,12 +3,16 @@ import { fetchJSearch } from "./jsearch";
 import { fetchAdzuna } from "./adzuna";
 import { fetchGermanToUsRoles } from "./german-us";
 import { fetchIndeedDe } from "./indeed-de";
+import { AGGREGATOR_SEARCH_TERMS, AGGREGATOR_LOCATIONS } from "@/lib/profile-hardcoded";
 
 // Run all aggregators (those that are configured via env vars) in parallel.
+// roleKeywords / locations are hardcoded (see profile-hardcoded.ts). The
+// `prefs` parameter is retained only for `seniority` and `salaryMin` —
+// everything else now comes from the hardcoded profile.
 export async function fetchAggregatorPostings(prefs: Preferences): Promise<AggregatorPosting[]> {
-  const roleKeywords = prefs.roleKeywords?.length ? prefs.roleKeywords : ["software engineer"];
-  const locations = prefs.locations?.length ? prefs.locations : ["United States"];
-  const remote = !!prefs.remote;
+  const roleKeywords = [...AGGREGATOR_SEARCH_TERMS];
+  const locations = [...AGGREGATOR_LOCATIONS];
+  const remote = true;
 
   const tasks: Promise<AggregatorPosting[]>[] = [];
   if (process.env.RAPIDAPI_KEY) {
