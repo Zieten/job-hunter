@@ -1,6 +1,7 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { db } from "@/lib/db";
+import { authConfig } from "@/auth.config";
 
 // Single-user passphrase auth.
 // - Set APP_PASSWORD in .env to whatever passphrase you want.
@@ -8,7 +9,7 @@ import { db } from "@/lib/db";
 //   (no email is ever sent — it's purely an identifier inside the DB).
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  session: { strategy: "jwt" },
+  ...authConfig,
   providers: [
     Credentials({
       name: "Passphrase",
@@ -30,17 +31,4 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       },
     }),
   ],
-  pages: { signIn: "/login" },
-  callbacks: {
-    async jwt({ token, user }) {
-      if (user?.id) token.uid = user.id;
-      return token;
-    },
-    async session({ session, token }) {
-      if (token?.uid && session.user) {
-        session.user = { ...session.user, id: token.uid as string };
-      }
-      return session;
-    },
-  },
 });
