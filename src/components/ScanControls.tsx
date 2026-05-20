@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Radar, Telescope, Loader2 } from "lucide-react";
+import { Radar, Telescope, RotateCcw, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -19,10 +19,19 @@ type DiscoveryReport = {
   skipped: number;
 };
 
+type RescoreReport = {
+  deleted: number;
+  candidates: number;
+  scored: number;
+  failed: number;
+};
+
 export function ScanControls() {
   const router = useRouter();
   const [scanning, setScanning] = useState(false);
   const [discovering, setDiscovering] = useState(false);
+  const [rescoring, setRescoring] = useState(false);
+  const busy = scanning || discovering || rescoring;
 
   async function runScan() {
     if (scanning) return;
@@ -70,12 +79,38 @@ export function ScanControls() {
     }
   }
 
+  async function runRescore() {
+    if (rescoring) return;
+    const ok = window.confirm(
+      "Re-score all postings?\n\nThis deletes every cached fit score and runs Claude against the current hardcoded criteria. Can take a couple minutes and costs roughly $1–3 in API spend.",
+    );
+    if (!ok) return;
+    setRescoring(true);
+    const t = toast.loading("Wiping fit scores and re-scoring against current criteria…");
+    try {
+      const res = await fetch("/api/rescore", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Rescore failed");
+      const r = data as RescoreReport;
+      toast.success(`Rescore complete — ${r.scored} scored`, {
+        id: t,
+        description: `Deleted ${r.deleted} old scores · ${r.candidates} eligible · ${r.failed} failed`,
+        duration: 8000,
+      });
+      router.refresh();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Rescore failed", { id: t });
+    } finally {
+      setRescoring(false);
+    }
+  }
+
   return (
-    <div className="flex gap-2 flex-wrap">
+    <div className="flex gap-2 flex-wrap items-center">
       <CronButton
         onClick={runScan}
         busy={scanning}
-        disabled={discovering}
+        disabled={busy && !scanning}
         label="Run scan"
         busyLabel="Scanning…"
         icon={<Radar className="size-4" />}
@@ -84,12 +119,26 @@ export function ScanControls() {
       <CronButton
         onClick={runDiscover}
         busy={discovering}
-        disabled={scanning}
+        disabled={busy && !discovering}
         label="Discover companies"
         busyLabel="Discovering…"
         icon={<Telescope className="size-4" />}
         gradient="from-emerald-500 via-teal-500 to-cyan-500"
       />
+      <button
+        onClick={runRescore}
+        disabled={busy}
+        className={cn(
+          "inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium",
+          "border border-border bg-background text-muted-foreground",
+          "hover:bg-accent hover:text-foreground transition-colors",
+          "disabled:opacity-50 disabled:cursor-not-allowed",
+        )}
+        title="Wipe all fit scores and re-score against current criteria"
+      >
+        {rescoring ? <Loader2 className="size-4 animate-spin" /> : <RotateCcw className="size-4" />}
+        {rescoring ? "Re-scoring…" : "Re-score"}
+      </button>
     </div>
   );
 }
