@@ -77,6 +77,17 @@ export default async function DashboardPage() {
       // 3. Recency
       return new Date(b.firstSeenAt).getTime() - new Date(a.firstSeenAt).getTime();
     })
+    // Cap at 3 postings per company — keeps the best 3 (already sorted by score/recency)
+    // so more firms are represented in the visible 120.
+    .filter((() => {
+      const seen = new Map<string, number>();
+      return (j: { companyId: string }) => {
+        const n = seen.get(j.companyId) ?? 0;
+        if (n >= 3) return false;
+        seen.set(j.companyId, n + 1);
+        return true;
+      };
+    })())
     .slice(0, 120);
 
   const newCount = jobs.filter((j) => j.status === "new").length;
