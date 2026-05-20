@@ -10,138 +10,158 @@ import type { AggregatorPosting, RawPosting } from "@/lib/types";
 import type { Company, JobSource, Prisma } from "@prisma/client";
 
 const SCRAPE_CONCURRENCY = 5;
-// Score at most this many postings per scan (Vercel route maxDuration is 300s;
-// at pLimit(3) concurrency this comfortably fits the time budget).
-const FIT_SCORE_CAP = 120;
+const SCORE_CONCURRENCY = 3;
 
-export type ScanReport = {
-  startedAt: string;
-  finishedAt: string;
-  laneAFavorites: { companyId: string; name: string; ok: boolean; newCount: number; error?: string }[];
-  laneBAggregators: { newCount: number; error?: string };
-  totalNew: number;
-  totalScored: number;
-  // Dashboard-eligible postings still awaiting a fit score after this scan.
-  // When > 0, run the scan again to score the rest.
-  unscoredEligibleRemaining: number;
-};
+// Per-call bounds. Each phase must finish well inside Vercel's 60s function
+// limit (Hobby plan), so the /api/scan route runs ONE bounded phase per call
+// and the client loops until each phase reports `remaining: 0`.
+export const FETCH_BATCH = 15; // companies scraped per "fetch" call
+export const SCORE_BATCH = 20; // postings scored per "score" call
 
-export async function runScan(userId: string): Promise<ScanReport> {
-  const startedAt = new Date();
+type PersistItem = { companyId: string; raw: RawPosting; source: JobSource };
+
+// Persist via createMany + skipDuplicates — one call per chunk instead of a
+// findFirst + create round-trip per posting. The (companyId, externalId,
+// source) unique constraint lets skipDuplicates drop ones already stored.
+// Returns the number of rows actually inserted.
+async function persistPostings(items: PersistItem[]): Promise<number> {
+  if (items.length === 0) return 0;
+  const rows: Prisma.JobPostingCreateManyInput[] = items.map((i) => ({
+    companyId: i.companyId,
+    externalId: i.raw.externalId,
+    title: i.raw.title,
+    normalizedTitle: normalizeJobTitle(i.raw.title),
+    location: i.raw.location,
+    remote: i.raw.remote,
+    salaryText: i.raw.salaryText,
+    salaryMin: i.raw.salaryMin,
+    salaryMax: i.raw.salaryMax,
+    salaryCurrency: i.raw.salaryCurrency,
+    url: i.raw.url,
+    descriptionMd: i.raw.descriptionMd,
+    postedAt: i.raw.postedAt,
+    source: i.source,
+  }));
+  let created = 0;
+  const CHUNK = 200;
+  for (let i = 0; i < rows.length; i += CHUNK) {
+    const res = await db.jobPosting.createMany({
+      data: rows.slice(i, i + CHUNK),
+      skipDuplicates: true,
+    });
+    created += res.count;
+  }
+  return created;
+}
+
+// A company is "due" for a Lane A scrape if it has never been scraped or its
+// per-company interval has elapsed.
+function isDue(c: Company): boolean {
+  if (!c.lastScrapedAt) return true;
+  const intervalMs = (c.scanIntervalDays ?? 1) * 24 * 60 * 60 * 1000;
+  return Date.now() - c.lastScrapedAt.getTime() >= intervalMs;
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Phase: aggregators (Lane B). Runs once per scan.
+// ──────────────────────────────────────────────────────────────────────────
+export type AggregatorPhaseResult = { phase: "aggregators"; newCount: number; error?: string };
+
+export async function runAggregatorPhase(userId: string): Promise<AggregatorPhaseResult> {
   const profile = await db.profile.findUnique({ where: { userId } });
   const preferences = readPreferences(profile);
-  const profileBlob = buildProfileBlob(profile);
 
-  const toScrape = await db.company.findMany({ where: { active: true } });
+  let postings: AggregatorPosting[] = [];
+  let error: string | undefined;
+  try {
+    postings = await fetchAggregatorPostings(preferences);
+  } catch (e) {
+    error = e instanceof Error ? e.message : String(e);
+  }
 
-  // --- Lane A: scrape all active companies (respecting per-company cadence) ---
+  const items: PersistItem[] = [];
+  for (const agg of postings) {
+    const company = await getOrCreateCompany(agg.companyNameRaw);
+    items.push({ companyId: company.id, raw: stripAggregatorFields(agg), source: agg.source });
+  }
+  const newCount = await persistPostings(items);
+  return { phase: "aggregators", newCount, error };
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Phase: fetch one batch of due companies (Lane A).
+// ──────────────────────────────────────────────────────────────────────────
+export type FetchBatchResult = {
+  phase: "fetch";
+  scraped: number;
+  remaining: number;
+  newCount: number;
+  errors: { name: string; error: string }[];
+};
+
+export async function runFetchBatch(batchSize = FETCH_BATCH): Promise<FetchBatchResult> {
+  const active = await db.company.findMany({ where: { active: true } });
+  const due = active
+    .filter(isDue)
+    .sort((a, b) => (a.lastScrapedAt?.getTime() ?? 0) - (b.lastScrapedAt?.getTime() ?? 0));
+  const batch = due.slice(0, batchSize);
+
   const limit = pLimit(SCRAPE_CONCURRENCY);
-  const laneAReport: ScanReport["laneAFavorites"] = [];
-  const laneAPostings: { company: Company; raw: RawPosting }[] = [];
+  const items: PersistItem[] = [];
+  const errors: { name: string; error: string }[] = [];
 
   await Promise.all(
-    toScrape.map((company) =>
+    batch.map((company) =>
       limit(async () => {
-        // Skip if last scrape is still within the company's scan interval
-        if (company.lastScrapedAt) {
-          const intervalMs = (company.scanIntervalDays ?? 1) * 24 * 60 * 60 * 1000;
-          if (Date.now() - company.lastScrapedAt.getTime() < intervalMs) return;
-        }
         try {
           const raws = await fetchCompanyJobs(company);
-          for (const r of raws) laneAPostings.push({ company, raw: r });
+          for (const r of raws) items.push({ companyId: company.id, raw: r, source: "favorite_scrape" });
           await db.company.update({
             where: { id: company.id },
             data: { lastScrapedAt: new Date(), lastError: null },
           });
-          laneAReport.push({ companyId: company.id, name: company.name, ok: true, newCount: raws.length });
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e);
+          errors.push({ name: company.name, error: msg });
           await db.company.update({
             where: { id: company.id },
             data: { lastScrapedAt: new Date(), lastError: msg },
           });
-          laneAReport.push({ companyId: company.id, name: company.name, ok: false, newCount: 0, error: msg });
         }
       }),
     ),
   );
 
-  // --- Lane B: aggregators ---
-  let laneBPostings: AggregatorPosting[] = [];
-  let laneBError: string | undefined;
-  try {
-    laneBPostings = await fetchAggregatorPostings(preferences);
-  } catch (e) {
-    laneBError = e instanceof Error ? e.message : String(e);
-  }
+  const newCount = await persistPostings(items);
+  return {
+    phase: "fetch",
+    scraped: batch.length,
+    remaining: Math.max(0, due.length - batch.length),
+    newCount,
+    errors,
+  };
+}
 
-  // --- Dedupe and persist ---
-  const seenKeys = new Set<string>();
-  const toCreate: { companyId: string; raw: RawPosting; source: JobSource }[] = [];
+// ──────────────────────────────────────────────────────────────────────────
+// Phase: score one batch of dashboard-eligible unscored postings.
+// ──────────────────────────────────────────────────────────────────────────
+export type ScoreBatchResult = { phase: "score"; scored: number; remaining: number };
 
-  // Lane A first (preferred source).
-  for (const { company, raw } of laneAPostings) {
-    const key = `${normalizeCompanyName(company.name)}::${normalizeJobTitle(raw.title)}`;
-    if (seenKeys.has(key)) continue;
-    seenKeys.add(key);
-    toCreate.push({ companyId: company.id, raw, source: "favorite_scrape" });
-  }
+export async function runScoreBatch(userId: string, batchSize = SCORE_BATCH): Promise<ScoreBatchResult> {
+  const profile = await db.profile.findUnique({ where: { userId } });
+  const preferences = readPreferences(profile);
+  const profileBlob = buildProfileBlob(profile);
 
-  // Then Lane B — auto-creating Company rows for non-favorite hits.
-  for (const agg of laneBPostings) {
-    const key = `${normalizeCompanyName(agg.companyNameRaw)}::${normalizeJobTitle(agg.title)}`;
-    if (seenKeys.has(key)) continue;
-    seenKeys.add(key);
-    const company = await getOrCreateCompany(agg.companyNameRaw);
-    toCreate.push({ companyId: company.id, raw: stripAggregatorFields(agg), source: agg.source });
-  }
-
-  // Filter to truly NEW postings (not already in DB) and create them.
-  let totalNew = 0;
-  for (const item of toCreate) {
-    const existing = await db.jobPosting.findFirst({
-      where: {
-        companyId: item.companyId,
-        externalId: item.raw.externalId,
-        source: item.source,
-      },
-    });
-    if (existing) continue;
-    await db.jobPosting.create({
-      data: {
-        companyId: item.companyId,
-        externalId: item.raw.externalId,
-        title: item.raw.title,
-        normalizedTitle: normalizeJobTitle(item.raw.title),
-        location: item.raw.location,
-        remote: item.raw.remote,
-        salaryText: item.raw.salaryText,
-        salaryMin: item.raw.salaryMin,
-        salaryMax: item.raw.salaryMax,
-        salaryCurrency: item.raw.salaryCurrency,
-        url: item.raw.url,
-        descriptionMd: item.raw.descriptionMd,
-        postedAt: item.raw.postedAt,
-        source: item.source,
-      },
-    });
-    totalNew++;
-  }
-
-  // --- Fit scoring ---
-  // Only score postings that would actually appear on the dashboard. Scoring
-  // filtered-out roles (e.g. the thousands of engineer postings from big
-  // favorites) wastes Claude spend since the exclude-list hides them anyway.
-  // Pull a recency-ordered window, keep the dashboard-eligible ones, and
-  // score up to FIT_SCORE_CAP. Newest first so fresh roles score promptly.
-  const unscoredWindow = await db.jobPosting.findMany({
+  // Only score postings that would actually appear on the dashboard — scoring
+  // filtered-out roles wastes Claude spend. Newest first so fresh roles score
+  // promptly; old filtered-out junk never enters the batch.
+  const window = await db.jobPosting.findMany({
     where: { assessment: null, status: { in: ["new", "reviewed", "selected", "applied"] } },
     include: { company: true },
     orderBy: { firstSeenAt: "desc" },
     take: 1500,
   });
-  const eligibleUnscored = unscoredWindow.filter((p) =>
+  const eligible = window.filter((p) =>
     filterPosting({
       title: p.title,
       location: p.location,
@@ -150,12 +170,13 @@ export async function runScan(userId: string): Promise<ScanReport> {
       source: p.source,
     }).keep,
   );
-  const unscored = eligibleUnscored.slice(0, FIT_SCORE_CAP);
-  const fitLimit = pLimit(3);
-  let totalScored = 0;
+  const batch = eligible.slice(0, batchSize);
+
+  const limit = pLimit(SCORE_CONCURRENCY);
+  let scored = 0;
   await Promise.all(
-    unscored.map((p) =>
-      fitLimit(async () => {
+    batch.map((p) =>
+      limit(async () => {
         try {
           const fit = await scoreFit({
             profileBlob,
@@ -179,7 +200,7 @@ export async function runScan(userId: string): Promise<ScanReport> {
               modelUsed: "claude-sonnet-4-6",
             },
           });
-          totalScored++;
+          scored++;
         } catch (e) {
           console.error("[fit-score]", p.id, e);
         }
@@ -187,14 +208,56 @@ export async function runScan(userId: string): Promise<ScanReport> {
     ),
   );
 
+  return { phase: "score", scored, remaining: Math.max(0, eligible.length - scored) };
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// All-in-one orchestration. Used by the /api/cron/scan debug endpoint and for
+// local runs. NOT used by the dashboard button — that drives the phases above
+// directly so each HTTP call stays inside the 60s function limit.
+// ──────────────────────────────────────────────────────────────────────────
+export type ScanReport = {
+  startedAt: string;
+  finishedAt: string;
+  laneBAggregators: { newCount: number; error?: string };
+  companiesScraped: number;
+  totalNew: number;
+  totalScored: number;
+  unscoredEligibleRemaining: number;
+};
+
+export async function runScan(userId: string): Promise<ScanReport> {
+  const startedAt = new Date();
+
+  const agg = await runAggregatorPhase(userId);
+  let totalNew = agg.newCount;
+
+  let companiesScraped = 0;
+  for (let i = 0; i < 50; i++) {
+    const r = await runFetchBatch();
+    companiesScraped += r.scraped;
+    totalNew += r.newCount;
+    if (r.remaining <= 0) break;
+  }
+
+  let totalScored = 0;
+  let unscoredEligibleRemaining = 0;
+  for (let i = 0; i < 200; i++) {
+    const r = await runScoreBatch(userId);
+    totalScored += r.scored;
+    unscoredEligibleRemaining = r.remaining;
+    if (r.remaining <= 0) break;
+    if (r.scored === 0) break; // persistent failures — stop looping
+  }
+
   return {
     startedAt: startedAt.toISOString(),
     finishedAt: new Date().toISOString(),
-    laneAFavorites: laneAReport,
-    laneBAggregators: { newCount: laneBPostings.length, error: laneBError },
+    laneBAggregators: { newCount: agg.newCount, error: agg.error },
+    companiesScraped,
     totalNew,
     totalScored,
-    unscoredEligibleRemaining: Math.max(0, eligibleUnscored.length - unscored.length),
+    unscoredEligibleRemaining,
   };
 }
 
@@ -208,7 +271,7 @@ async function getOrCreateCompany(rawName: string): Promise<Company> {
       normalizedName: normalized,
       atsType: "unknown",
       isFavorite: false,
-      active: false, // we won't scrape this one in Lane A
+      active: false, // Lane B hits aren't scraped in Lane A
     },
   });
 }

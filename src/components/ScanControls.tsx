@@ -5,14 +5,6 @@ import { Radar, Telescope, RotateCcw, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
-type ScanReport = {
-  totalNew: number;
-  totalScored: number;
-  unscoredEligibleRemaining: number;
-  laneAFavorites: { ok: boolean; newCount: number }[];
-  laneBAggregators: { newCount: number; error?: string };
-};
-
 type DiscoveryReport = {
   discovered: number;
   added: number;
@@ -20,12 +12,20 @@ type DiscoveryReport = {
   skipped: number;
 };
 
-type RescoreReport = {
-  deleted: number;
-  candidates: number;
-  scored: number;
-  failed: number;
+type ScanPhaseResult = {
+  newCount?: number;
+  scraped?: number;
+  scored?: number;
+  remaining?: number;
+  error?: string;
 };
+
+// Per-click wall-clock budget for the score loop. A first big scan can leave a
+// few hundred eligible roles to score; this caps one button press to a sane
+// duration. Re-click to continue — scored progress persists in the DB.
+const SCORE_BUDGET_MS = 8 * 60 * 1000;
+const FETCH_MAX_ITERS = 40;
+const SCORE_MAX_ITERS = 80;
 
 export function ScanControls() {
   const router = useRouter();
@@ -34,28 +34,61 @@ export function ScanControls() {
   const [rescoring, setRescoring] = useState(false);
   const busy = scanning || discovering || rescoring;
 
+  // One bounded /api/scan call. Each phase finishes inside the 60s limit.
+  async function callScan(mode: "aggregators" | "fetch" | "score"): Promise<ScanPhaseResult> {
+    const res = await fetch("/api/scan", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error((data as { error?: string }).error ?? `Scan (${mode}) failed`);
+    return data as ScanPhaseResult;
+  }
+
+  // Loop score batches until the backlog clears or the time budget is hit.
+  // Returns [scoredThisRun, remaining].
+  async function scoreLoop(t: string | number, label: string): Promise<[number, number]> {
+    let scored = 0;
+    let remaining = 0;
+    const deadline = Date.now() + SCORE_BUDGET_MS;
+    for (let i = 0; i < SCORE_MAX_ITERS; i++) {
+      const r = await callScan("score");
+      scored += r.scored ?? 0;
+      remaining = r.remaining ?? 0;
+      toast.loading(`${label} ${scored} scored · ${remaining} left…`, { id: t });
+      if (remaining <= 0) break;
+      if ((r.scored ?? 0) === 0) break; // persistent failures — stop looping
+      if (Date.now() > deadline) break;
+    }
+    return [scored, remaining];
+  }
+
   async function runScan() {
-    if (scanning) return;
+    if (busy) return;
     setScanning(true);
-    const t = toast.loading("Scanning ATS pages and aggregators…");
+    const t = toast.loading("Searching job boards…");
     try {
-      const res = await fetch("/api/scan", { method: "POST" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Scan failed");
-      const r = data as ScanReport;
-      const laneA = r.laneAFavorites.reduce((s, x) => s + (x.newCount ?? 0), 0);
-      const laneB = r.laneBAggregators.newCount;
-      const remaining =
-        r.unscoredEligibleRemaining > 0
-          ? ` · ${r.unscoredEligibleRemaining} eligible roles still need scoring — run scan again`
-          : "";
-      const desc =
-        `Lane A (favorites): ${laneA} · Lane B (aggregators): ${laneB}` +
-        `${r.laneBAggregators.error ? ` · Lane B error: ${r.laneBAggregators.error}` : ""}` +
-        remaining;
-      toast.success(`Scan complete — ${r.totalNew} new, ${r.totalScored} scored`, {
+      let totalNew = 0;
+
+      // Phase 1 — aggregators (Lane B), one call.
+      const agg = await callScan("aggregators");
+      totalNew += agg.newCount ?? 0;
+
+      // Phase 2 — scrape favorite companies in bounded batches.
+      for (let i = 0; i < FETCH_MAX_ITERS; i++) {
+        const r = await callScan("fetch");
+        totalNew += r.newCount ?? 0;
+        toast.loading(`Scraping companies… ${r.remaining ?? 0} left`, { id: t });
+        if ((r.remaining ?? 0) <= 0) break;
+      }
+
+      // Phase 3 — score eligible roles within the per-click time budget.
+      const [scored, remaining] = await scoreLoop(t, "Scoring matches…");
+
+      const tail = remaining > 0 ? ` · ${remaining} still need scoring — click Run scan again` : "";
+      toast.success(`Scan complete — ${totalNew} new, ${scored} scored${tail}`, {
         id: t,
-        description: desc,
         duration: 9000,
       });
       router.refresh();
@@ -88,22 +121,25 @@ export function ScanControls() {
   }
 
   async function runRescore() {
-    if (rescoring) return;
+    if (busy) return;
     const ok = window.confirm(
-      "Re-score all postings?\n\nThis deletes every cached fit score and runs Claude against the current hardcoded criteria. Can take a couple minutes and costs roughly $1–3 in API spend.",
+      "Re-score all postings?\n\nThis deletes every cached fit score, then re-scores against the current criteria. Costs roughly $1-3 in API spend and may take several minutes — keep this tab open. Re-click to continue if it does not finish in one pass.",
     );
     if (!ok) return;
     setRescoring(true);
-    const t = toast.loading("Wiping fit scores and re-scoring against current criteria…");
+    const t = toast.loading("Wiping fit scores…");
     try {
       const res = await fetch("/api/rescore", { method: "POST" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Rescore failed");
-      const r = data as RescoreReport;
-      toast.success(`Rescore complete — ${r.scored} scored`, {
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((data as { error?: string }).error ?? "Rescore failed");
+      const deleted = (data as { deleted?: number }).deleted ?? 0;
+
+      const [scored, remaining] = await scoreLoop(t, "Re-scoring…");
+
+      const tail = remaining > 0 ? ` · ${remaining} left — click Re-score again` : "";
+      toast.success(`Re-score — ${deleted} cleared, ${scored} scored${tail}`, {
         id: t,
-        description: `Deleted ${r.deleted} old scores · ${r.candidates} eligible · ${r.failed} failed`,
-        duration: 8000,
+        duration: 9000,
       });
       router.refresh();
     } catch (e) {
