@@ -373,6 +373,11 @@ export const AGGREGATOR_QUERY_GROUPS = [
   '"Customer Success" Lead OR Director OR VP',
   '"Strategic Accounts" OR "Strategic Partnerships" OR "GSI Partner"',
   '"AI Transformation" OR "Head of AI"',
+  // Groups 9-12: cover common titling on ZipRecruiter / Bing Jobs not caught above
+  '"Partner Development Manager" OR "Partner Development Director"',
+  '"Channel Partner" OR "Channel Sales Director" OR "Channel Manager"',
+  '"Technology Alliances" OR "Cloud Alliances" OR "ISV Partner" OR "Platform Partner"',
+  '"Enterprise Partnerships" OR "Platform Partnerships" OR "Ecosystem Director" OR "Partner Program Manager"',
 ] as const;
 
 // Legacy single-list form kept for the Profile card preview. Mirrors the

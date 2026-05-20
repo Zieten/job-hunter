@@ -77,7 +77,7 @@ export default async function DashboardPage() {
       // 3. Recency
       return new Date(b.firstSeenAt).getTime() - new Date(a.firstSeenAt).getTime();
     })
-    .slice(0, 100);
+    .slice(0, 120);
 
   const newCount = jobs.filter((j) => j.status === "new").length;
   const highFit = jobs.filter((j) => (j.assessment?.fitScore ?? 0) >= 80).length;
