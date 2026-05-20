@@ -144,7 +144,7 @@ export function SearchCriteriaCard() {
           <div className="text-sm">
             <p className="font-medium">Title exclusions (auto-rejected)</p>
             <p className="text-muted-foreground text-xs mt-0.5">
-              Any "Engineer" (Staff/Solutions/Sales/SWE/SRE/QA/etc.) · engineering management · "Technical&nbsp;X" (Lead, Enablement, TAM, Program Manager) · Research lead / Researcher / Research Scientist · Safeguard / Trust&nbsp;&amp;&nbsp;Safety / Safety analyst · Policy analyst · IT / Help desk / Desktop support · Accounting / FP&amp;A / Audit / Tax / AR / AP / Bookkeeping / Controller · Design / UX · Marketing execution · HR / Recruiting · Legal · "Staff&nbsp;X" / Admin / Administrator / Administrative / Assistant / Coordinator / Clerk / Secretary · Field / clinical / retail ops · Junior / Intern / Associate / Entry-level.
+              Any "Engineer" (Staff/Solutions/Sales/SWE/SRE/QA/etc.) · engineering management · "Technical&nbsp;X" (Lead, Enablement, TAM, Program Manager) · Research lead / Researcher / Scientist · Safeguard / Trust&nbsp;&amp;&nbsp;Safety / Safety analyst · Policy analyst · Any "Support" role (Customer/Sales/Tech/IT/Help&nbsp;desk) · Regional non-US (DACH, EMEA, APAC, LATAM, ANZ, MENA, UK, Ireland) · Events / Event Manager · Legal / General Counsel / Compliance · Accounting / FP&amp;A / Audit / Tax / AR / AP / Bookkeeping / Controller · Design / UX · Marketing execution · HR / Recruiting · "Staff&nbsp;X" / Admin / Administrator / Administrative / Assistant / Coordinator / Clerk / Secretary · Field / clinical / retail ops · Junior / Intern / Associate / Entry-level.
             </p>
           </div>
         </div>

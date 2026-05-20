@@ -173,12 +173,43 @@ export const HARD_FILTER = {
     "safety analyst",
     "policy analyst",
 
-    // IT / helpdesk / support
+    // IT / helpdesk / support (broad — any "support" role)
+    "support",
     "it support",
     "help desk",
     "helpdesk",
     "desktop support",
     "service desk",
+
+    // Non-US regional roles — Ben is based in Seattle and targeting US
+    "dach",
+    "emea",
+    "apac",
+    "latam",
+    "anz ",
+    "anz,",
+    "mena",
+    "uk &",
+    "uk and",
+    "uk,",
+    "united kingdom",
+    "ireland",
+
+    // Events / field marketing
+    "event ",
+    "events ",
+    "events,",
+    "event planner",
+    "event manager",
+    "events manager",
+
+    // Legal & compliance (broader)
+    "legal ",
+    "legal,",
+    "general counsel",
+    "compliance ",
+    "compliance,",
+    "compliance officer",
 
     // Design / UX / creative
     "designer",
