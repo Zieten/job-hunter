@@ -5,10 +5,14 @@ import { fetchAggregatorPostings } from "@/lib/aggregators";
 import { scoreFit } from "@/lib/ai/fit";
 import { buildProfileBlob, readPreferences } from "@/lib/profile-blob";
 import { normalizeCompanyName, normalizeJobTitle } from "@/lib/utils";
+import { filterPosting } from "@/lib/profile-hardcoded";
 import type { AggregatorPosting, RawPosting } from "@/lib/types";
 import type { Company, JobSource, Prisma } from "@prisma/client";
 
 const SCRAPE_CONCURRENCY = 5;
+// Score at most this many postings per scan (Vercel route maxDuration is 300s;
+// at pLimit(3) concurrency this comfortably fits the time budget).
+const FIT_SCORE_CAP = 120;
 
 export type ScanReport = {
   startedAt: string;
@@ -17,6 +21,9 @@ export type ScanReport = {
   laneBAggregators: { newCount: number; error?: string };
   totalNew: number;
   totalScored: number;
+  // Dashboard-eligible postings still awaiting a fit score after this scan.
+  // When > 0, run the scan again to score the rest.
+  unscoredEligibleRemaining: number;
 };
 
 export async function runScan(userId: string): Promise<ScanReport> {
@@ -122,12 +129,28 @@ export async function runScan(userId: string): Promise<ScanReport> {
     totalNew++;
   }
 
-  // --- Fit scoring for new postings without an assessment ---
-  const unscored = await db.jobPosting.findMany({
-    where: { assessment: null },
+  // --- Fit scoring ---
+  // Only score postings that would actually appear on the dashboard. Scoring
+  // filtered-out roles (e.g. the thousands of engineer postings from big
+  // favorites) wastes Claude spend since the exclude-list hides them anyway.
+  // Pull a recency-ordered window, keep the dashboard-eligible ones, and
+  // score up to FIT_SCORE_CAP. Newest first so fresh roles score promptly.
+  const unscoredWindow = await db.jobPosting.findMany({
+    where: { assessment: null, status: { in: ["new", "reviewed", "selected", "applied"] } },
     include: { company: true },
-    take: 100,
+    orderBy: { firstSeenAt: "desc" },
+    take: 1500,
   });
+  const eligibleUnscored = unscoredWindow.filter((p) =>
+    filterPosting({
+      title: p.title,
+      location: p.location,
+      remote: p.remote,
+      salaryMax: p.salaryMax,
+      source: p.source,
+    }).keep,
+  );
+  const unscored = eligibleUnscored.slice(0, FIT_SCORE_CAP);
   const fitLimit = pLimit(3);
   let totalScored = 0;
   await Promise.all(
@@ -171,6 +194,7 @@ export async function runScan(userId: string): Promise<ScanReport> {
     laneBAggregators: { newCount: laneBPostings.length, error: laneBError },
     totalNew,
     totalScored,
+    unscoredEligibleRemaining: Math.max(0, eligibleUnscored.length - unscored.length),
   };
 }
 

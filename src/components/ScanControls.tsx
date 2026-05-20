@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 type ScanReport = {
   totalNew: number;
   totalScored: number;
+  unscoredEligibleRemaining: number;
   laneAFavorites: { ok: boolean; newCount: number }[];
   laneBAggregators: { newCount: number; error?: string };
 };
@@ -44,11 +45,18 @@ export function ScanControls() {
       const r = data as ScanReport;
       const laneA = r.laneAFavorites.reduce((s, x) => s + (x.newCount ?? 0), 0);
       const laneB = r.laneBAggregators.newCount;
-      const desc = `Lane A (favorites): ${laneA} · Lane B (aggregators): ${laneB}${r.laneBAggregators.error ? ` · Lane B error: ${r.laneBAggregators.error}` : ""}`;
+      const remaining =
+        r.unscoredEligibleRemaining > 0
+          ? ` · ${r.unscoredEligibleRemaining} eligible roles still need scoring — run scan again`
+          : "";
+      const desc =
+        `Lane A (favorites): ${laneA} · Lane B (aggregators): ${laneB}` +
+        `${r.laneBAggregators.error ? ` · Lane B error: ${r.laneBAggregators.error}` : ""}` +
+        remaining;
       toast.success(`Scan complete — ${r.totalNew} new, ${r.totalScored} scored`, {
         id: t,
         description: desc,
-        duration: 8000,
+        duration: 9000,
       });
       router.refresh();
     } catch (e) {
