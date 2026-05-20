@@ -223,12 +223,21 @@ export const HARD_FILTER = {
     "people ops",
     "people operations",
 
-    // Legal / admin
+    // Admin / assistant / staff-level (per Ben: no admin, assistant, staff, or similar)
+    "admin ",
+    "admin,",
+    "administrator",
+    "administrative",
+    "assistant",
+    "staff ",
+    "staff,",
     "paralegal",
     "legal counsel",
-    "executive assistant",
     "office manager",
     "receptionist",
+    "coordinator",
+    "clerk",
+    "secretary",
 
     // Field / ops / customer support / clinical
     "warehouse",
