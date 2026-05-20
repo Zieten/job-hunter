@@ -144,7 +144,7 @@ export function SearchCriteriaCard() {
           <div className="text-sm">
             <p className="font-medium">Title exclusions (auto-rejected)</p>
             <p className="text-muted-foreground text-xs mt-0.5">
-              IC engineering (software/data/ML engineer, SRE, etc.), engineering management, design/UX, marketing execution, accounting / finance back-office, HR / recruiting, legal admin, field ops, junior / intern / associate levels.
+              Any "Engineer" (Staff/Solutions/Sales/SWE/SRE/QA/etc.) · engineering management · "Technical&nbsp;X" (Lead, Enablement, TAM, Program Manager) · Research lead / Researcher / Research Scientist · Safeguard / Trust&nbsp;&amp;&nbsp;Safety / Safety analyst · Policy analyst · IT / Help desk / Desktop support · Accounting / FP&amp;A / Audit / Tax / AR / AP / Bookkeeping / Controller · Design / UX · Marketing execution · HR / Recruiting · Legal admin · Field / clinical / retail ops · Junior / Intern / Associate / Entry-level.
             </p>
           </div>
         </div>

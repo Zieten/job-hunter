@@ -139,27 +139,16 @@ export const HARD_FILTER = {
   // junior ops, finance/accounting back office, etc.). Anything else passes
   // the filter and the AI fit score decides relevance.
   roleExcludeKeywords: [
-    // Deep IC engineering / hands-on coding roles
-    "software engineer",
+    // Engineer (broad) — covers Staff/Senior/Solutions/Sales/SWE/SRE/QA/etc.
+    // Ben explicitly excludes engineer titles, even Solutions/Sales Engineer.
+    "engineer",
     "swe",
-    "ml engineer",
-    "data engineer",
-    "data scientist",
-    "backend engineer",
-    "frontend engineer",
-    "full stack engineer",
-    "full-stack engineer",
-    "devops engineer",
     "site reliability",
     "sre",
-    "qa engineer",
-    "test engineer",
-    "embedded engineer",
-    "firmware engineer",
-    "security engineer",
-    "research engineer",
+    "data scientist",
     "research scientist",
     "applied scientist",
+    "scientist",
 
     // Engineering management (Ben's not pitching as eng leader)
     "engineering manager",
@@ -167,6 +156,29 @@ export const HARD_FILTER = {
     "vp engineering",
     "head of engineering",
     "cto",
+
+    // "Technical X" — Ben excluded "technical anything". Catches Technical
+    // Lead, Technical Enablement, Technical Account Manager (TAM),
+    // Technical Program Manager, Technical Recruiter, etc.
+    "technical ",
+    "technical,",
+
+    // Research / safety / safeguarding ICs (per Ben: research lead, safeguard analyst, etc.)
+    "research lead",
+    "research manager",
+    "researcher",
+    "safeguard",
+    "trust and safety",
+    "trust & safety",
+    "safety analyst",
+    "policy analyst",
+
+    // IT / helpdesk / support
+    "it support",
+    "help desk",
+    "helpdesk",
+    "desktop support",
+    "service desk",
 
     // Design / UX / creative
     "designer",
