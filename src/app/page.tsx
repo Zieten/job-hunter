@@ -20,11 +20,29 @@ export default async function DashboardPage() {
 
   // Hardcoded filter (see src/lib/profile-hardcoded.ts) — no longer reads
   // preferences from the DB. DB query stays broad; precision happens in JS.
-  const jobsRaw = await db.jobPosting.findMany({
-    where: { status: { in: ["new", "reviewed", "selected", "applied"] } },
+  // With thousands of postings in the DB, an unordered `take` would grab an
+  // arbitrary slice that could miss the best matches. Fetch in two ordered
+  // slices: ALL scored postings (by fit, highest first) plus the most recent
+  // unscored ones — guaranteeing every scored match is in the window.
+  const scoredJobs = await db.jobPosting.findMany({
+    where: {
+      status: { in: ["new", "reviewed", "selected", "applied"] },
+      assessment: { isNot: null },
+    },
     include: { company: true, assessment: true },
+    orderBy: { assessment: { fitScore: "desc" } },
     take: 1000,
   });
+  const unscoredJobs = await db.jobPosting.findMany({
+    where: {
+      status: { in: ["new", "reviewed", "selected", "applied"] },
+      assessment: { is: null },
+    },
+    include: { company: true, assessment: true },
+    orderBy: { firstSeenAt: "desc" },
+    take: 800,
+  });
+  const jobsRaw = [...scoredJobs, ...unscoredJobs];
 
   const jobs = jobsRaw
     .filter((j) => {
