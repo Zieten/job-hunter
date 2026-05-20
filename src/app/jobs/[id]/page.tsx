@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { MapPin, Banknote, ExternalLink } from "lucide-react";
 import { relativeTime } from "@/lib/utils";
+import { sanitizeJobDescription } from "@/lib/job-description";
 import { TailorPanel } from "./TailorPanel";
 
 export const dynamic = "force-dynamic";
@@ -26,6 +27,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
   const fit = job.assessment?.fitScore ?? 0;
   const fitVariant = fit >= 80 ? "strong" : fit >= 60 ? "mid" : "weak";
   const latestCV = job.tailoredCVs[0] ?? null;
+  const description = sanitizeJobDescription(job.descriptionMd);
 
   return (
     <div className="py-6 space-y-6">
@@ -82,10 +84,29 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
       )}
 
       <div className="rounded-xl border bg-card p-5">
-        <h2 className="text-sm font-semibold mb-2">Job description</h2>
-        <div className="text-sm whitespace-pre-wrap text-foreground/90 max-h-[600px] overflow-y-auto">
-          {job.descriptionMd}
-        </div>
+        <h2 className="text-sm font-semibold mb-3">Job description</h2>
+        {description.html ? (
+          <div
+            className="text-sm text-foreground/90 max-h-[600px] overflow-y-auto pr-1
+              [&_h1]:text-base [&_h1]:font-semibold [&_h1]:mt-5 [&_h1]:mb-1 [&_h1]:text-foreground
+              [&_h2]:text-[15px] [&_h2]:font-semibold [&_h2]:mt-5 [&_h2]:mb-1 [&_h2]:text-foreground
+              [&_h3]:text-sm [&_h3]:font-semibold [&_h3]:mt-5 [&_h3]:mb-1 [&_h3]:text-foreground
+              [&_h4]:text-sm [&_h4]:font-semibold [&_h4]:mt-4 [&_h4]:mb-1 [&_h4]:text-foreground
+              [&_p]:my-2 [&_p]:leading-relaxed
+              [&_ul]:my-2 [&_ul]:pl-5 [&_ul]:list-disc [&_ul]:space-y-1
+              [&_ol]:my-2 [&_ol]:pl-5 [&_ol]:list-decimal [&_ol]:space-y-1
+              [&_li]:leading-relaxed [&_li]:pl-1
+              [&_strong]:font-semibold [&_strong]:text-foreground
+              [&_b]:font-semibold [&_b]:text-foreground
+              [&_a]:text-primary [&_a]:underline [&_a]:underline-offset-2
+              [&_br]:content-['']"
+            dangerouslySetInnerHTML={{ __html: description.html }}
+          />
+        ) : (
+          <div className="text-sm whitespace-pre-wrap leading-relaxed text-foreground/90 max-h-[600px] overflow-y-auto pr-1">
+            {description.text}
+          </div>
+        )}
       </div>
 
       <TailorPanel jobId={job.id} initialCV={latestCV} applyUrl={job.url} />
