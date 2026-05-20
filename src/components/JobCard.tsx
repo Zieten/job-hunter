@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import type { JobPosting, FitAssessment, Company } from "@prisma/client";
 import { Badge } from "@/components/ui/badge";
 import { relativeTime } from "@/lib/utils";
+import { isGermanSource } from "@/lib/profile-hardcoded";
 
 type Props = {
   job: JobPosting & { company: Company; assessment: FitAssessment | null };
@@ -95,6 +96,15 @@ export function JobCard({ job }: Props) {
                     className="size-3 shrink-0 fill-amber-400 text-amber-400"
                     aria-label="Priority company"
                   />
+                )}
+                {isGermanSource(job.source) && (
+                  <span
+                    className="text-[13px] leading-none shrink-0"
+                    aria-label="German firm"
+                    title="German firm — bypasses strict role/comp filters, +15 fit boost"
+                  >
+                    🇩🇪
+                  </span>
                 )}
                 {job.company.name}
               </p>
